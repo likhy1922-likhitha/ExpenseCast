@@ -1,0 +1,58 @@
+{
+  "dataset_file": "Personal_Finance_Dataset.csv",
+  "file_sha256": "5e105d1b566e314c936cbc429b4c45e4b5fb8d94ff67f204cafb8b7f74ad8dd6",
+  "provenance": "Supplied archive (Personal_Finance_Dataset.csv); public/Kaggle provenance unverified",
+  "currency_declared": "Unverified (no currency symbol in raw dataset; treated as generic monetary units)",
+  "total_rows": 1500,
+  "total_columns": 5,
+  "columns": [
+    "Date",
+    "Transaction Description",
+    "Category",
+    "Amount",
+    "Type"
+  ],
+  "missing_values": 0,
+  "date_range": {
+    "min": "2020-01-02",
+    "max": "2024-12-29"
+  },
+  "amounts": {
+    "min": 14.37,
+    "max": 4996.0,
+    "mean": 1307.5209133333335
+  },
+  "type_counts": {
+    "Expense": 1222,
+    "Income": 278
+  },
+  "category_counts": {
+    "Rent": 165,
+    "Travel": 160,
+    "Utilities": 157,
+    "Health & Fitness": 152,
+    "Shopping": 150,
+    "Food & Drink": 149,
+    "Salary": 146,
+    "Entertainment": 143,
+    "Investment": 142,
+    "Other": 136
+  },
+  "data_quality_concerns": [
+    {
+      "issue": "Salary categorized as Expense",
+      "detail": "All 146 records in category \"Salary\" are marked Type=\"Expense\". None are marked \"Income\".",
+      "handling": "In accordance with non-negotiable rules, records are preserved untouched in raw data; filtering strictly uses Type==\"Expense\" for expenditures."
+    },
+    {
+      "issue": "Limited Income categories",
+      "detail": "Only ['Investment', 'Other'] are marked as Income ({'Investment': 142, 'Other': 136}).",
+      "handling": "Expense forecasting focuses strictly on Type==\"Expense\"."
+    },
+    {
+      "issue": "Synthetic descriptions and unverified currency",
+      "detail": "Transaction descriptions appear procedurally generated; no currency code or symbol is embedded.",
+      "handling": "Recorded honestly without inventing currency labels or external provenance."
+    }
+  ]
+}

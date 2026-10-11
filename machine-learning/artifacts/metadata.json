@@ -1,0 +1,171 @@
+{
+  "model_name": "ExpenseCast_LSTM",
+  "model_type": "TensorFlow/Keras Sequential LSTM",
+  "framework_versions": {
+    "tensorflow": "2.21.0",
+    "keras": "3.15.1",
+    "numpy": "2.5.3",
+    "pandas": "3.0.6"
+  },
+  "trained_at": "2026-10-10T15:22:06.026003Z",
+  "dataset": {
+    "file": "Personal_Finance_Dataset.csv",
+    "sha256": "5e105d1b566e314c936cbc429b4c45e4b5fb8d94ff67f204cafb8b7f74ad8dd6",
+    "date_range": {
+      "min": "2020-01-02 00:00:00",
+      "max": "2024-12-29 00:00:00"
+    },
+    "provenance": "Personal_Finance_Dataset.csv (unverified public source)",
+    "currency": "Unverified generic monetary units"
+  },
+  "architecture": {
+    "input_shape": [
+      30,
+      12
+    ],
+    "output_shape": [
+      9
+    ],
+    "layers": [
+      {
+        "type": "Input",
+        "shape": [
+          30,
+          12
+        ]
+      },
+      {
+        "type": "LSTM",
+        "units": 64,
+        "return_sequences": true
+      },
+      {
+        "type": "Dropout",
+        "rate": 0.2
+      },
+      {
+        "type": "LSTM",
+        "units": 32
+      },
+      {
+        "type": "Dropout",
+        "rate": 0.2
+      },
+      {
+        "type": "Dense",
+        "units": 16,
+        "activation": "relu"
+      },
+      {
+        "type": "Dense",
+        "units": 9,
+        "activation": "linear"
+      }
+    ]
+  },
+  "features": [
+    "total",
+    "Entertainment",
+    "Food & Drink",
+    "Health & Fitness",
+    "Rent",
+    "Salary",
+    "Shopping",
+    "Travel",
+    "Utilities",
+    "dow",
+    "dom",
+    "month"
+  ],
+  "targets": [
+    "total",
+    "Entertainment",
+    "Food & Drink",
+    "Health & Fitness",
+    "Rent",
+    "Salary",
+    "Shopping",
+    "Travel",
+    "Utilities"
+  ],
+  "expense_categories": [
+    "Entertainment",
+    "Food & Drink",
+    "Health & Fitness",
+    "Rent",
+    "Salary",
+    "Shopping",
+    "Travel",
+    "Utilities"
+  ],
+  "window_size_days": 30,
+  "forecast_horizon_days": 30,
+  "splits": {
+    "train": {
+      "start": "2020-01-31 00:00:00",
+      "end": "2023-06-18 00:00:00",
+      "count": 1235
+    },
+    "val": {
+      "start": "2023-06-19 00:00:00",
+      "end": "2024-03-08 00:00:00",
+      "count": 264
+    },
+    "test": {
+      "start": "2024-03-09 00:00:00",
+      "end": "2024-11-29 00:00:00",
+      "count": 266
+    }
+  },
+  "epochs_trained": 15,
+  "evaluation": {
+    "lstm_test_total": {
+      "mae": 4180.08,
+      "rmse": 4968.16
+    },
+    "lstm_test_categories": {
+      "Entertainment": {
+        "mae": 1352.42,
+        "rmse": 1712.85
+      },
+      "Food & Drink": {
+        "mae": 1668.46,
+        "rmse": 2236.86
+      },
+      "Health & Fitness": {
+        "mae": 1182.0,
+        "rmse": 1520.55
+      },
+      "Rent": {
+        "mae": 1028.6,
+        "rmse": 1216.89
+      },
+      "Salary": {
+        "mae": 1405.29,
+        "rmse": 1738.01
+      },
+      "Shopping": {
+        "mae": 1535.75,
+        "rmse": 1869.51
+      },
+      "Travel": {
+        "mae": 1870.27,
+        "rmse": 2236.7
+      },
+      "Utilities": {
+        "mae": 1262.31,
+        "rmse": 1451.28
+      }
+    },
+    "baselines": {
+      "naive_last_30d_total": {
+        "mae": 4974.67,
+        "rmse": 6328.85
+      },
+      "train_mean_total": {
+        "mae": 3626.74,
+        "rmse": 4545.1
+      }
+    }
+  }
+}
