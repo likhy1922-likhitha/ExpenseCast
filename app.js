@@ -90,10 +90,12 @@ if (bannerExitDemo) bannerExitDemo.onclick = exitDemoMode;
 $('#loginForm').onsubmit = async e => {
     e.preventDefault();
     try {
+        const email = $('#loginEmail').value.trim().toLowerCase();
+        const password = $('#loginPassword').value;
         const d = await api('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: $('#loginEmail').value, password: $('#loginPassword').value })
+            body: JSON.stringify({ email, password })
         });
         isDemoMode = false;
         user = d.user;
@@ -106,10 +108,13 @@ $('#loginForm').onsubmit = async e => {
 $('#signupForm').onsubmit = async e => {
     e.preventDefault();
     try {
+        const name = $('#signupName').value.trim();
+        const email = $('#signupEmail').value.trim().toLowerCase();
+        const password = $('#signupPassword').value;
         const d = await api('/api/auth/signup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: $('#signupName').value, email: $('#signupEmail').value, password: $('#signupPassword').value })
+            body: JSON.stringify({ name, email, password })
         });
         isDemoMode = false;
         user = d.user;

@@ -3,17 +3,16 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
-import sqlite3, os, hashlib, hmac, secrets, base64, csv, io
+import os, hashlib, hmac, secrets, base64, csv, io
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import numpy as np
 
 from backend.ml_service import ml_service
 from backend.demo_service import demo_service
+from backend.db import get_connection, init_db, is_unique_violation, is_postgres
 
 ROOT = Path(__file__).resolve().parents[1]
-DB_PATH = ROOT / 'expensecast.db'
-DATABASE_URL = os.getenv('DATABASE_URL')
 SECRET = os.getenv('EXPENSECAST_SECRET', 'expensecast-production-secret-key-default').encode()
 
 app = FastAPI(title='ExpenseCast API', version='1.0.0')
@@ -29,50 +28,9 @@ app.add_middleware(
 )
 
 def db():
-    c = sqlite3.connect(DB_PATH)
-    c.row_factory = sqlite3.Row
-    return c
+    return get_connection()
 
-def init_db():
-    c = db()
-    c.executescript('''
-    CREATE TABLE IF NOT EXISTS users(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS transactions(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        date TEXT NOT NULL,
-        type TEXT NOT NULL,
-        amount REAL NOT NULL,
-        merchant TEXT NOT NULL,
-        category TEXT NOT NULL,
-        recurring INTEGER DEFAULT 0,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    );
-    CREATE TABLE IF NOT EXISTS budgets(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        month TEXT NOT NULL,
-        amount REAL NOT NULL,
-        UNIQUE(user_id, month)
-    );
-    CREATE TABLE IF NOT EXISTS goals(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        name TEXT NOT NULL,
-        target REAL NOT NULL,
-        current REAL NOT NULL DEFAULT 0,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    );
-    ''')
-    c.commit()
-    c.close()
-
+# Initialize tables safely across SQLite / PostgreSQL
 init_db()
 
 def hash_pw(pw: str) -> str:
@@ -150,11 +108,20 @@ class Goal(BaseModel):
 # Health endpoints
 @app.get('/health')
 def health_root():
-    return {'status': 'ok', 'service': 'ExpenseCast API', 'version': '1.0.0'}
+    return {
+        'status': 'ok',
+        'service': 'ExpenseCast API',
+        'version': '1.0.0',
+        'database': 'postgresql' if is_postgres() else 'sqlite'
+    }
 
 @app.get('/api/health')
 def health():
-    return {'status': 'ok', 'service': 'ExpenseCast API'}
+    return {
+        'status': 'ok',
+        'service': 'ExpenseCast API',
+        'database': 'postgresql' if is_postgres() else 'sqlite'
+    }
 
 # ML Status endpoint
 @app.get('/api/ml/status')
@@ -164,21 +131,26 @@ def ml_status():
 # Auth Endpoints
 @app.post('/api/auth/signup')
 def signup(a: Auth):
-    if not a.name or len(a.password) < 6:
+    clean_name = (a.name or '').strip()
+    clean_email = str(a.email).strip().lower()
+    if not clean_name or len(a.password) < 6:
         raise HTTPException(400, 'Name and password of at least 6 characters are required')
     c = db()
     try:
-        cur = c.execute(
+        uid = c.execute_insert(
             'INSERT INTO users(name, email, password_hash, created_at) VALUES(?, ?, ?, ?)',
-            (a.name, a.email.lower(), hash_pw(a.password), datetime.now(timezone.utc).isoformat())
+            (clean_name, clean_email, hash_pw(a.password), datetime.now(timezone.utc).isoformat()),
+            returning_col='id'
         )
         c.commit()
-        uid = cur.lastrowid
-    except sqlite3.IntegrityError:
+    except Exception as e:
+        c.rollback()
         c.close()
-        raise HTTPException(409, 'An account with this email already exists')
+        if is_unique_violation(e):
+            raise HTTPException(409, 'An account with this email already exists')
+        raise HTTPException(500, f'Registration failed: {e}')
     c.close()
-    resp = JSONResponse({'user': {'id': uid, 'name': a.name, 'email': a.email.lower()}})
+    resp = JSONResponse({'user': {'id': uid, 'name': clean_name, 'email': clean_email}})
     resp.set_cookie(
         'expensecast_session',
         token(uid),
@@ -191,9 +163,13 @@ def signup(a: Auth):
 
 @app.post('/api/auth/login')
 def login(a: Auth):
+    clean_email = str(a.email).strip().lower()
     c = db()
-    r = c.execute('SELECT * FROM users WHERE email=?', (a.email.lower(),)).fetchone()
-    c.close()
+    try:
+        r = c.execute('SELECT * FROM users WHERE email=?', (clean_email,)).fetchone()
+    finally:
+        c.close()
+
     if not r or not check_pw(a.password, r['password_hash']):
         raise HTTPException(401, 'Invalid email or password')
     resp = JSONResponse({'user': {'id': r['id'], 'name': r['name'], 'email': r['email']}})
@@ -232,12 +208,17 @@ def add_tx(request: Request, t: Tx):
     if t.amount <= 0:
         raise HTTPException(400, 'Amount must be greater than zero')
     c = db()
-    cur = c.execute(
-        'INSERT INTO transactions(user_id, date, type, amount, merchant, category, recurring) VALUES(?, ?, ?, ?, ?, ?, ?)',
-        (u, t.date, t.type, t.amount, t.merchant, t.category, int(t.recurring))
-    )
-    c.commit()
-    rid = cur.lastrowid
+    try:
+        rid = c.execute_insert(
+            'INSERT INTO transactions(user_id, date, type, amount, merchant, category, recurring) VALUES(?, ?, ?, ?, ?, ?, ?)',
+            (u, t.date, t.type, t.amount, t.merchant, t.category, int(t.recurring)),
+            returning_col='id'
+        )
+        c.commit()
+    except Exception:
+        c.rollback()
+        c.close()
+        raise
     c.close()
     return {'id': rid}
 
@@ -383,12 +364,17 @@ def goals(request: Request):
 def add_goal(request: Request, g: Goal):
     u = uid_from_request(request)['id']
     c = db()
-    cur = c.execute(
-        'INSERT INTO goals(user_id, name, target, current) VALUES(?, ?, ?, ?)',
-        (u, g.name, g.target, g.current)
-    )
-    c.commit()
-    rid = cur.lastrowid
+    try:
+        rid = c.execute_insert(
+            'INSERT INTO goals(user_id, name, target, current) VALUES(?, ?, ?, ?)',
+            (u, g.name, g.target, g.current),
+            returning_col='id'
+        )
+        c.commit()
+    except Exception:
+        c.rollback()
+        c.close()
+        raise
     c.close()
     return {'id': rid}
 

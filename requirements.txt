@@ -8,3 +8,4 @@ tensorflow-cpu>=2.16.0
 keras>=3.0.0
 joblib>=1.4.0
 email-validator>=2.0.0
+psycopg2-binary>=2.9.9
